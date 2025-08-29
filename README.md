@@ -1,429 +1,220 @@
 # Veracode Pipeline-Scan Wrapper
 
-A bash script that acts as a wrapper around Veracode pipeline-scan (or any command), running it and analyzing the output for specific patterns when the command exits with code 255. The script implements the official Veracode exit code taxonomy to provide granular error classification for CI/CD pipeline integration. After analysis, it displays the complete command output for easy review.
+A robust bash script wrapper for Veracode pipeline-scan commands that provides intelligent error analysis, pattern matching, and standardized exit codes for CI/CD integration.
+
+## Overview
+
+The Veracode Pipeline-Scan Wrapper acts as a command wrapper that:
+- Executes any command and displays its output in real-time
+- Analyzes command output for specific error patterns when the original command exits with code 255
+- Provides standardized exit codes (201-254) for different error categories
+- Preserves original exit codes (0-200) when no patterns are matched
+- Handles complex commands with spaces and special characters correctly
 
 ## Features
 
-- **Command Wrapper**: Runs any command and displays output in real-time
-- **Pattern Analysis**: Analyzes command output only when exit code is 255
-- **Official Exit Code Taxonomy**: Implements Veracode's negative exit code system
-- **Preserves Original Exit Codes**: Keeps 0 (PASS) and 1-200 (FAIL with flaw count)
-- **Configurable Patterns**: Define custom regex patterns in a simple configuration file
-- **Verbose Output**: Optional detailed logging for debugging and monitoring
-- **Dry Run Mode**: Test your configuration without actually running commands
-- **Cross-Platform**: Works with different grep implementations (Perl, Extended, Basic regex)
-
-## Files
-
-- `pipeline-scan-analyzer.sh` - Main wrapper script
-- `patterns.conf` - Configuration file with patterns and exit codes
-- `README.md` - This documentation file
+- **Command Wrapping**: Wraps any command while preserving argument structure
+- **Real-time Output**: Displays command output as it runs
+- **Pattern Analysis**: Detects specific error patterns in command output
+- **Standardized Exit Codes**: Uses category-based exit codes (201-254) for consistent CI/CD integration
+- **Space Handling**: Properly handles file paths with spaces and special characters
+- **Configurable Patterns**: Easy-to-modify pattern configuration file
 
 ## Installation
 
-1. Make the script executable:
+1. Clone or download the repository
+2. Make the script executable:
    ```bash
    chmod +x pipeline-scan-analyzer.sh
    ```
-
-2. Ensure you have bash and grep available (standard on most Unix-like systems)
-
-## Configuration
-
-The `patterns.conf` file uses a simple pipe-separated format:
-
-```
-PATTERN_NAME|REGEX_PATTERN|EXIT_CODE
-```
-
-### Exit Code Taxonomy
-
-The script implements the official Veracode Pipeline-Scan exit code taxonomy using negative values to avoid colliding with the flaw-count range (1-200):
-
-#### Timeouts
-- **-10**: TIMEOUT_DEFAULT - exceeded default 60-min limit
-- **-11**: TIMEOUT_USER - exceeded --timeout value
-
-#### Auth/Org
-- **-20**: AUTH_INVALID_CREDENTIALS - API ID/key bad or expired
-- **-21**: AUTH_INSUFFICIENT_PERMISSIONS - token valid but lacks rights
-- **-22**: ACCOUNT_RATE_LIMIT - platform throttling/429
-
-#### Network/Transport
-- **-30**: NET_DNS - cannot resolve host
-- **-31**: NET_TLS - SSL/TLS handshake/cert validation failure
-- **-32**: NET_PROXY - proxy auth/connectivity failure
-
-#### Configuration
-- **-40**: CONFIG_INVALID_PARAM - bad CLI arg
-- **-41**: CONFIG_POLICY_REFERENCE_NOT_FOUND - named policy missing
-- **-42**: CONFIG_BASELINE_MISSING - baseline file not found
-- **-43**: CONFIG_THRESHOLD_CONFLICT - conflicting settings
-
-#### Packaging/Artifact
-- **-50**: PKG_ARTIFACT_NOT_FOUND - built package/path missing
-- **-51**: PKG_TOO_LARGE - exceeds size limit
-- **-52**: PKG_UNSUPPORTED_LANG - no supported files detected
-- **-53**: PKG_EXCLUDE_RULES_ELIMINATED_ALL - glob/exclude removed all
-
-#### Engine/Scan Execution
-- **-60**: ENGINE_PARSER_ERROR - preprocessing/AST parse error
-- **-61**: ENGINE_RULEPACK_INCOMPATIBLE - ruleset version mismatch
-- **-62**: ENGINE_PARTIAL_SCAN - scan completed with modules skipped
-
-#### Results/Post-processing
-- **-70**: RESULT_UPLOAD_FAILED - results couldn't be posted to API
-- **-71**: RESULT_WRITE_FAILED - couldn't write results artifact
-- **-72**: RESULT_FORMAT_ERROR - SARIF/JSON transform failed
+3. Ensure `grep` with extended regex support is available
+4. Customize `patterns.conf` if needed
 
 ## Usage
 
-### Basic Usage
+### Basic Syntax
 
 ```bash
-./pipeline-scan-analyzer.sh -- veracode-pipeline-scan --file app.zip
+./pipeline-scan-analyzer.sh [OPTIONS] -- COMMAND [ARGS...]
 ```
 
-### With Custom Configuration
+### Options
 
+- `-c, --config FILE`: Specify custom patterns configuration file (default: `patterns.conf`)
+- `-v, --verbose`: Enable verbose output
+- `-d, --dry-run`: Show what would be executed without running the command
+- `-h, --help`: Display help information
+
+### Examples
+
+#### Basic Command Wrapping
 ```bash
-./pipeline-scan-analyzer.sh -c custom_patterns.conf -- veracode-pipeline-scan --verbose --file app.zip
+# Wrap a simple command
+./pipeline-scan-analyzer.sh -- echo "Hello World"
+
+# Wrap a command with file paths containing spaces
+./pipeline-scan-analyzer.sh -- java -jar pipeline-scan.jar -f "/path/with spaces/file.war"
+
+# Wrap Veracode pipeline-scan
+./pipeline-scan-analyzer.sh -- java -jar pipeline-scan.jar -f "target/app.war"
 ```
 
-### Verbose Mode
-
+#### With Custom Configuration
 ```bash
-./pipeline-scan-analyzer.sh -v -- veracode-pipeline-scan --file app.zip
+# Use custom patterns file
+./pipeline-scan-analyzer.sh -c custom-patterns.conf -- java -jar pipeline-scan.jar -f "app.war"
+
+# Verbose mode
+./pipeline-scan-analyzer.sh -v -- java -jar pipeline-scan.jar -f "app.war"
 ```
 
-### Dry Run (Test Mode)
+## Exit Code Taxonomy
 
-```bash
-./pipeline-scan-analyzer.sh --dry-run -- echo "test command"
+The wrapper uses a standardized exit code system to categorize different types of errors:
+
+### **TIMEOUTS (201-209)**
+- `201`: `TIMEOUT_DEFAULT` - Exceeded default 60-minute limit
+- `202`: `TIMEOUT_USER` - Exceeded user-specified timeout value
+
+### **AUTH / ORG (210-219)**
+- `210`: `AUTH_INVALID_CREDENTIALS` - API ID/key bad or expired, 401 errors
+- `211`: `AUTH_INSUFFICIENT_PERMISSIONS` - Token valid but lacks app/scan rights
+- `212`: `ACCOUNT_RATE_LIMIT` - Platform throttling, 429 errors
+
+### **NETWORK / TRANSPORT (220-229)**
+- `220`: `NET_DNS` - Cannot resolve host, DNS issues
+- `221`: `NET_TLS` - SSL/TLS handshake or certificate validation failure
+- `222`: `NET_PROXY` - Proxy authentication or connectivity failure
+
+### **CONFIGURATION (CALLER) (230-239)**
+- `230`: `CONFIG_INVALID_PARAM` - Bad CLI arguments, mutually exclusive flags
+- `231`: `CONFIG_POLICY_REFERENCE_NOT_FOUND` - Named policy/ruleset missing
+- `232`: `CONFIG_BASELINE_MISSING` - Baseline file path not found or unreadable
+- `233`: `CONFIG_THRESHOLD_CONFLICT` - Conflicting --fail_on_* settings
+
+### **PACKAGING / ARTIFACT (240-249)**
+- `240`: `PKG_ARTIFACT_NOT_FOUND` - Built package/path missing, file not found
+- `241`: `PKG_TOO_LARGE` - Exceeds size limit
+- `242`: `PKG_UNSUPPORTED_LANG` - No supported files detected for scan type
+- `243`: `PKG_EXCLUDE_RULES_ELIMINATED_ALL` - Glob/exclude removed all inputs
+
+### **ENGINE / SCAN EXECUTION (250-254)**
+- `250`: `ENGINE_PARSER_ERROR` - Preprocessing/AST parse error prevents analysis
+- `251`: `ENGINE_RULEPACK_INCOMPATIBLE` - Ruleset version mismatch
+- `252`: `ENGINE_PARTIAL_SCAN` - Scan completed with modules skipped (degraded)
+- `253`: `ENGINE_SCAN_FAILED` - General scan or analysis failure
+- `254`: `ENGINE_UNKNOWN_ERROR` - Unknown or unexpected engine error
+
+### **Original Exit Codes (0-200)**
+- `0`: Success (PASS: no flaws found under current thresholds)
+- `1-200`: FAIL: flaws found; value equals flaw count
+
+## Pattern Configuration
+
+Patterns are defined in `patterns.conf` using the format:
+```
+CATEGORY_NAME|pattern_regex|exit_code
 ```
 
-### Help
-
-```bash
-./pipeline-scan-analyzer.sh --help
+### Example Patterns
+```
+AUTH_INVALID_CREDENTIALS|401|210
+AUTH_INVALID_CREDENTIALS|unauthorized|210
+PKG_ARTIFACT_NOT_FOUND|file not found|240
+ENGINE_PARSER_ERROR|parse error|250
 ```
 
-## Command Line Options
+## How It Works
 
-| Option | Long Option | Description |
-|--------|-------------|-------------|
-| `-c` | `--config` | Specify custom configuration file (default: `patterns.conf`) |
-| `-v` | `--verbose` | Enable verbose output |
-| `-d` | `--dry-run` | Show what would be done without running the command |
-| `-j` | `--json` | Output results to JSON file |
-| `-h` | `--help` | Show help message |
+1. **Command Execution**: The wrapper executes the provided command and captures its output
+2. **Exit Code Analysis**: 
+   - If original exit code is 0-200: preserved (flaw count or success)
+   - If original exit code is 255: triggers pattern analysis
+3. **Pattern Matching**: Searches command output for configured patterns
+4. **Exit Code Determination**: 
+   - Uses original exit code if no patterns match
+   - Uses logical exit code from pattern matching if patterns are found
+5. **Output Display**: Shows command output, analysis summary, and final exit code
 
-## Exit Codes
+## CI/CD Integration
 
-### Standard Veracode Exit Codes
-- **0**: PASS - no flaws found (under current thresholds)
-- **1-200**: FAIL - flaws found; value = count
-- **255**: Command failed but no patterns matched
-
-### Granular Error Codes (Converted to Positive by Bash)
-When the wrapped command exits with code 255, the script analyzes patterns and returns specific error codes. Since bash only supports exit codes 0-255, negative codes are converted by adding 256:
-
-| Logical Code | Bash Code | Category | Description |
-|--------------|-----------|----------|-------------|
-| -10 | 246 | Timeout | Default 60-min limit exceeded |
-| -11 | 245 | Timeout | User-specified timeout exceeded |
-| -20 | 236 | Auth | Invalid API credentials |
-| -21 | 235 | Auth | Insufficient permissions |
-| -22 | 234 | Auth | Rate limit exceeded |
-| -30 | 226 | Network | DNS resolution failure |
-| -31 | 225 | Network | TLS/SSL handshake failure |
-| -32 | 224 | Network | Proxy connectivity failure |
-| -40 | 216 | Config | Invalid CLI parameter |
-| -41 | 215 | Config | Policy reference not found |
-| -42 | 214 | Config | Baseline missing |
-| -43 | 213 | Config | Threshold conflict |
-| -50 | 206 | Package | Artifact not found |
-| -51 | 205 | Package | Package too large |
-| -52 | 204 | Package | Unsupported language |
-| -53 | 203 | Package | Exclude rules eliminated all files |
-| -60 | 196 | Engine | Parser error |
-| -61 | 195 | Engine | Rulepack incompatible |
-| -62 | 194 | Engine | Partial scan |
-| -70 | 186 | Results | Upload failed |
-| -71 | 185 | Results | Write failed |
-| -72 | 184 | Results | Format error |
-
-### System Exit Codes (100+)
-- **100**: Configuration file not found
-- **101**: Invalid command format
-
-## Examples
-
-### CI/CD Pipeline Integration
-
-#### GitHub Actions
+The wrapper is designed for seamless CI/CD integration:
 
 ```yaml
-- name: Run Veracode Pipeline Scan with Wrapper
+# GitHub Actions Example
+- name: Run Veracode Scan
   run: |
-    ./pipeline-scan-analyzer.sh -- veracode-pipeline-scan --file app.zip
-  continue-on-error: true
-  id: veracode_scan
-
-- name: Handle Authentication Issues
-  if: steps.veracode_scan.outcome == 'failure' && steps.veracode_scan.outputs.exit-code == '236'
+    ./pipeline-scan-analyzer.sh -- java -jar pipeline-scan.jar -f "target/app.war"
+  
+- name: Handle Scan Results
   run: |
-    echo "Authentication failed (exit 236 = -20) - check API credentials"
-    
-- name: Handle Package Issues  
-  if: steps.veracode_scan.outcome == 'failure' && steps.veracode_scan.outputs.exit-code >= '203' && steps.veracode_scan.outputs.exit-code <= '206'
-  run: |
-    echo "Package/artifact issue detected"
-    
-- name: Handle Security Findings
-  if: steps.veracode_scan.outcome == 'failure' && steps.veracode_scan.outputs.exit-code >= '1' && steps.veracode_scan.outputs.exit-code <= '200'
-  run: |
-    echo "Security findings detected: ${{ steps.veracode_scan.outputs.exit-code }} flaw(s)"
+    case $? in
+      0) echo "Scan passed - no flaws found" ;;
+      1-200) echo "Scan failed - found $? flaws" ;;
+      201-254) echo "Scan failed - error category: $?" ;;
+    esac
 ```
 
-#### Jenkins Pipeline
-
-```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Veracode Scan') {
-            steps {
-                script {
-                    def exitCode = sh(
-                        script: './pipeline-scan-analyzer.sh -- veracode-pipeline-scan --file app.zip',
-                        returnStatus: true
-                    )
-                    
-                    if (exitCode == 0) {
-                        echo "Scan passed - no flaws found"
-                    } else if (exitCode >= 1 && exitCode <= 200) {
-                        echo "Security findings detected: ${exitCode} flaw(s)"
-                        currentBuild.result = 'UNSTABLE'
-                    } else if (exitCode == 236) {  // -20
-                        error "Authentication failed - check API credentials"
-                    } else if (exitCode >= 203 && exitCode <= 206) {  // -53 to -50
-                        error "Package/artifact issue detected"
-                    } else if (exitCode >= 224 && exitCode <= 226) {  // -32 to -30
-                        error "Network issue detected"
-                    } else if (exitCode == 255) {
-                        error "Scan failed but no specific pattern matched"
-                    } else {
-                        error "Unexpected exit code: ${exitCode}"
-                    }
-                }
-            }
-        }
-    }
-}
+```yaml
+# GitLab CI Example
+veracode_scan:
+  script:
+    - ./pipeline-scan-analyzer.sh -- java -jar pipeline-scan.jar -f "target/app.war"
+  after_script:
+    - |
+      case $? in
+        0) echo "Scan passed - no flaws found" ;;
+        1-200) echo "Scan failed - found $? flaws" ;;
+        201-254) echo "Scan failed - error category: $?" ;;
+      esac
 ```
 
-### Custom Pattern Configuration
+## Requirements
 
-```bash
-# Create custom patterns for your specific needs
-cat > custom_patterns.conf << EOF
-# Custom authentication patterns
-CUSTOM_AUTH_ERROR|authentication.*failed|-20
-CUSTOM_AUTH_ERROR|login.*denied|-20
-
-# Custom package patterns  
-CUSTOM_PKG_ERROR|package.*corrupted|-50
-CUSTOM_PKG_ERROR|invalid.*format|-50
-
-# Custom network patterns
-CUSTOM_NET_ERROR|connection.*timeout|-30
-CUSTOM_NET_ERROR|server.*unreachable|-30
-EOF
-
-# Use with custom config
-./pipeline-scan-analyzer.sh -c custom_patterns.conf -- your-scan-command
-```
-
-## JSON Output
-
-The script automatically generates a comprehensive JSON report named `veracode-pipeline-scan-wrapper.json` for programmatic analysis and CI/CD integration:
-
-```bash
-./pipeline-scan-analyzer.sh -- your-command
-# JSON file automatically created: veracode-pipeline-scan-wrapper.json
-```
-
-### JSON Output Format
-
-The JSON output follows this structure:
-
-```json
-{
-    "tool": "veracode-pipeline-scan",
-    "version": "wrapper-1.0",
-    "disposition": "PASS|FAIL",
-    "exit_code": 0,
-    "reason_code": "SUCCESS|FLAWS_FOUND|PATTERN_MATCHED|UNKNOWN_ERROR|UNEXPECTED_EXIT",
-    "summary": "Human-readable description",
-    "flaw_count": 0,
-    "severity_counts": {"very_high": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
-    "timing": {
-        "total_ms": 1500
-    },
-    "context": {
-        "event": "push|pull_request|manual|unknown",
-        "repo": "owner/repo|group/project|unknown",
-        "commit": "sha|unknown",
-        "branch": "main|feature|unknown"
-    },
-    "pattern_match": {
-        "name": "Pattern name from config",
-        "regex": "Regex pattern that matched",
-        "count": 1
-    },
-    "raw": {
-        "stdout_tail": ["Last 20 lines of command output"],
-        "stderr_tail": ["Last 20 lines of stderr"]
-    }
-}
-```
-
-### JSON Field Descriptions
-
-- **tool**: Always "veracode-pipeline-scan"
-- **version**: Wrapper version (currently "wrapper-1.0")
-- **disposition**: Overall result - "PASS" or "FAIL"
-- **exit_code**: The actual exit code returned by the script
-- **reason_code**: Specific reason for the result
-  - `SUCCESS`: Command completed successfully (exit 0)
-  - `FLAWS_FOUND`: Security flaws detected (exit 1-200)
-  - `PATTERN_MATCHED`: Error pattern identified (exit -10 to -79)
-  - `UNKNOWN_ERROR`: No patterns matched (exit 255)
-  - `UNEXPECTED_EXIT`: Unexpected exit code
-- **summary**: Human-readable description of the result
-- **flaw_count**: Number of security flaws found (0 for non-scan failures)
-- **severity_counts**: Breakdown of flaws by severity (automatically parsed from command output)
-  - `very_high`: Count of Very High severity issues
-  - `high`: Count of High severity issues  
-  - `medium`: Count of Medium severity issues
-  - `low`: Count of Low severity issues
-  - `info`: Count of Informational severity issues
-- **timing**: Execution time in milliseconds
-- **context**: CI/CD environment information (GitHub Actions, GitLab CI, etc.)
-- **pattern_match**: Pattern matching details (only present when `reason_code` is `PATTERN_MATCHED`)
-  - `name`: Name of the matched pattern from configuration
-  - `regex`: The regex pattern that matched
-  - `count`: Number of times the pattern was found
-- **raw**: Last 20 lines of command output for debugging
-
-**Note**: The `pattern_match` section is only included in the JSON when a pattern is actually matched (i.e., when `reason_code` is `PATTERN_MATCHED`). For all other scenarios, this section is omitted.
-
-### Severity Count Parsing
-
-When the command exits with a flaw count (exit codes 1-200), the script automatically parses the command output to extract severity information. It looks for patterns like:
-
-```
-Found 4 issues of Very High severity.
-Found 14 issues of High severity.
-Found 117 issues of Medium severity.
-Found 30 issues of Low severity.
-Found 18 issues of Informational severity.
-```
-
-The severity counts are then included in the JSON output for detailed analysis and reporting.
-
-### CI/CD Integration with JSON
-
-```bash
-# Run the wrapper - JSON file automatically generated
-./pipeline-scan-analyzer.sh -- veracode-pipeline-scan --file app.zip
-
-# Parse results in your CI/CD script
-if [ -f "veracode-pipeline-scan-wrapper.json" ]; then
-    disposition=$(jq -r '.disposition' veracode-pipeline-scan-wrapper.json)
-    exit_code=$(jq -r '.exit_code' veracode-pipeline-scan-wrapper.json)
-    reason_code=$(jq -r '.reason_code' veracode-pipeline-scan-wrapper.json)
-    
-    echo "Scan disposition: $disposition"
-    echo "Exit code: $exit_code"
-    echo "Reason: $reason_code"
-    
-    if [ "$disposition" = "FAIL" ]; then
-        if [ "$exit_code" -ge 1 ] && [ "$exit_code" -le 200 ]; then
-            echo "Security flaws detected: $exit_code"
-        elif [ "$exit_code" -eq 236 ]; then  # -20
-            echo "Authentication failed - check credentials"
-        elif [ "$exit_code" -eq 255 ]; then
-            echo "Unknown error occurred"
-        fi
-    fi
-fi
-```
+- **Bash**: Version 4.0 or higher
+- **grep**: With extended regex support (`grep -E`)
+- **Unix-like environment**: Linux, macOS, or WSL
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Permission Denied**: Make sure the script is executable (`chmod +x pipeline-scan-analyzer.sh`)
+1. **"grep with extended regex support (-E) is required"**
+   - Ensure `grep -E` is available and functional
+   - Test with: `echo "test" | grep -E "test"`
 
-2. **Configuration File Not Found**: Check the path to your `patterns.conf` file
+2. **Command arguments with spaces not working**
+   - Use quotes around arguments: `"/path/with spaces/file.war"`
+   - The wrapper automatically handles proper quoting
 
-3. **Pattern Not Matching**: Use verbose mode (`-v`) to see which patterns are being processed
-
-4. **Command Parsing Issues**: Make sure to use `--` before your command arguments
+3. **Patterns not matching**
+   - Check regex syntax in `patterns.conf`
+   - Use verbose mode (`-v`) to see detailed output
+   - Ensure patterns are specific enough to avoid false positives
 
 ### Debug Mode
 
-Use the `--dry-run` flag to test your configuration without running the actual command:
-
+Enable verbose output to troubleshoot issues:
 ```bash
-./pipeline-scan-analyzer.sh --dry-run --verbose -- veracode-pipeline-scan --file app.zip
+./pipeline-scan-analyzer.sh -v -- your-command
 ```
-
-### Testing Patterns
-
-You can test individual patterns using grep on command output:
-
-```bash
-# Capture command output to a file
-your-command > output.txt 2>&1
-
-# Test a pattern from your config
-grep -E "credentials.*invalid" output.txt
-```
-
-### Understanding Exit Code Conversion
-
-Remember that bash converts negative exit codes to positive values:
-- Logical exit code: -20 (AUTH_INVALID_CREDENTIALS)  
-- Actual bash exit code: 236 (256 + (-20))
-
-You can convert back to logical codes in your scripts:
-```bash
-if [ $exit_code -gt 200 ]; then
-    logical_code=$((exit_code - 256))
-    echo "Logical exit code: $logical_code"
-fi
-```
-
-## How It Works
-
-1. **Command Execution**: The wrapper runs your command and displays output in real-time
-2. **Exit Code Preservation**: Commands exiting with 0 or 1-200 pass through unchanged
-3. **Pattern Analysis**: Only when exit code is 255, the wrapper:
-   - Analyzes the captured command output
-   - Searches for configured patterns using regex
-   - Returns the most specific negative exit code found
-   - If no patterns match, returns 255
-4. **Complete Output Display**: After analysis, the wrapper displays the complete command output for review
-
-This design ensures that normal Veracode scan results (pass/fail with flaw counts) are preserved while providing detailed error classification for actual scan failures.
 
 ## Contributing
 
-Feel free to submit issues, feature requests, or pull requests to improve this tool.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the pattern configuration
+3. Enable verbose mode for debugging
+4. Open an issue with detailed error information
