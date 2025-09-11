@@ -113,16 +113,24 @@ The wrapper uses a standardized exit code system to categorize different types o
 
 Patterns are defined in `patterns.conf` using the format:
 ```
-CATEGORY_NAME|pattern_regex|exit_code
+CATEGORY_NAME|pattern_regex|exit_code|error_message
 ```
 
 ### Example Patterns
 ```
-AUTH_INVALID_CREDENTIALS|401|210
-AUTH_INVALID_CREDENTIALS|unauthorized|210
-PKG_ARTIFACT_NOT_FOUND|file not found|240
-ENGINE_PARSER_ERROR|parse error|250
+AUTH_INVALID_CREDENTIALS|401|210|Authentication failed with HTTP 401 Unauthorized. Please verify your Veracode API credentials are correct and have not expired.
+AUTH_INVALID_CREDENTIALS|unauthorized|210|Unauthorized access detected. Please verify your Veracode API credentials are correct and have not expired.
+PKG_ARTIFACT_NOT_FOUND|file not found|240|File not found. The specified file could not be located. Please verify the file path and ensure the artifact exists.
+ENGINE_PARSER_ERROR|parse error|250|Parser error detected. The Veracode engine encountered an error while parsing the code. This may indicate syntax issues or unsupported code constructs.
 ```
+
+### Error Message Field
+
+The fourth field contains a detailed error message that will be displayed in the analysis summary when a pattern is matched. These messages provide:
+- Clear description of the issue
+- Specific guidance on how to resolve the problem
+- Context about what the error means
+- Recommended next steps
 
 ## How It Works
 
@@ -134,7 +142,34 @@ ENGINE_PARSER_ERROR|parse error|250
 4. **Exit Code Determination**: 
    - Uses original exit code if no patterns match
    - Uses logical exit code from pattern matching if patterns are found
-5. **Output Display**: Shows command output, analysis summary, and final exit code
+5. **Output Display**: Shows command output, analysis summary with detailed error messages, and final exit code
+
+## Analysis Summary Output
+
+When a pattern is matched, the wrapper displays a comprehensive analysis summary:
+
+```
+----------------------------------------
+[WRAPPER] INFO: ANALYSIS SUMMARY
+----------------------------------------
+Original command exit code: 0
+Pattern matched: AUTH_INVALID_CREDENTIALS
+Pattern regex: invalid.*credential
+Match count: 1
+Logical exit code: 210
+Error message: Invalid API credentials detected. Please verify your Veracode API ID and API Key are correct and have not expired. Check your credentials in the Veracode platform and update your configuration.
+Reason: Pattern 'AUTH_INVALID_CREDENTIALS' found in command output
+----------------------------------------
+```
+
+The summary includes:
+- **Original command exit code**: The exit code from the wrapped command
+- **Pattern matched**: The name of the matched pattern
+- **Pattern regex**: The regular expression that matched
+- **Match count**: Number of times the pattern was found
+- **Logical exit code**: The standardized exit code (201-254)
+- **Error message**: Detailed explanation and guidance
+- **Reason**: Brief explanation of why this exit code was chosen
 
 ## CI/CD Integration
 

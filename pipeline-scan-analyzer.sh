@@ -95,7 +95,7 @@ process_patterns() {
     local highest_exit_code=0
     
     # Read patterns from config file
-    while IFS='|' read -r pattern_name pattern_regex exit_code; do
+    while IFS='|' read -r pattern_name pattern_regex exit_code error_message; do
         # Skip comments and empty lines
         [[ "$pattern_name" =~ ^[[:space:]]*# ]] && continue
         [[ -z "$pattern_name" ]] && continue
@@ -104,9 +104,10 @@ process_patterns() {
         pattern_name=$(echo "$pattern_name" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         pattern_regex=$(echo "$pattern_regex" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         exit_code=$(echo "$exit_code" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        error_message=$(echo "$error_message" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
         # Skip if any field is empty or contains only whitespace
-        [[ -z "$pattern_name" || -z "$pattern_regex" || -z "$exit_code" ]] && continue
+        [[ -z "$pattern_name" || -z "$pattern_regex" || -z "$exit_code" || -z "$error_message" ]] && continue
         
         # Validate exit code is numeric
         [[ ! "$exit_code" =~ ^[0-9]+$ ]] && continue
@@ -117,13 +118,13 @@ process_patterns() {
         
         # Debug: Print variables to see what's causing the issue
         if [[ "$VERBOSE" == "true" ]]; then
-            print_status "DEBUG" "Processing pattern: '$pattern_name' | '$pattern_regex' | '$exit_code'" >&2
+            print_status "DEBUG" "Processing pattern: '$pattern_name' | '$pattern_regex' | '$exit_code' | '$error_message'" >&2
             print_status "DEBUG" "Match count: '$match_count' (length: ${#match_count})" >&2
             print_status "DEBUG" "Match count hex: $(echo -n "$match_count" | hexdump -C)" >&2
         fi
         
         if [[ "$match_count" -gt 0 ]]; then
-            matched_patterns+=("$pattern_name|$pattern_regex|$exit_code|$match_count")
+            matched_patterns+=("$pattern_name|$pattern_regex|$exit_code|$error_message|$match_count")
             
             # Update highest exit code (we want the highest positive number)
             if [[ "$exit_code" -gt "$highest_exit_code" ]]; then
@@ -135,10 +136,10 @@ process_patterns() {
     # Return results as JSON-like string
     if [[ ${#matched_patterns[@]} -gt 0 ]]; then
         local first_match="${matched_patterns[0]}"
-        IFS='|' read -r pattern_name pattern_regex exit_code match_count <<< "$first_match"
-        echo "{\"exit_code\": $exit_code, \"pattern_name\": \"$pattern_name\", \"pattern_regex\": \"$pattern_regex\", \"pattern_count\": $match_count}"
+        IFS='|' read -r pattern_name pattern_regex exit_code error_message match_count <<< "$first_match"
+        echo "{\"exit_code\": $exit_code, \"pattern_name\": \"$pattern_name\", \"pattern_regex\": \"$pattern_regex\", \"error_message\": \"$error_message\", \"pattern_count\": $match_count}"
     else
-        echo "{\"exit_code\": 0, \"pattern_name\": \"\", \"pattern_regex\": \"\", \"pattern_count\": 0}"
+        echo "{\"exit_code\": 0, \"pattern_name\": \"\", \"pattern_regex\": \"\", \"error_message\": \"\", \"pattern_count\": 0}"
     fi
 }
 
@@ -206,6 +207,7 @@ display_summary() {
     local pattern_regex=""
     local pattern_count=0
     local logical_exit_code=0
+    local error_message=""
     
     if [[ -n "$pattern_result" ]]; then
         # Extract values from JSON-like string
@@ -213,6 +215,7 @@ display_summary() {
         pattern_regex=$(echo "$pattern_result" | grep -o '"pattern_regex": "[^"]*"' | cut -d'"' -f4)
         pattern_count=$(echo "$pattern_result" | grep -o '"pattern_count": [0-9]*' | cut -d' ' -f2)
         logical_exit_code=$(echo "$pattern_result" | grep -o '"exit_code": [0-9]*' | cut -d' ' -f2)
+        error_message=$(echo "$pattern_result" | grep -o '"error_message": "[^"]*"' | cut -d'"' -f4)
     fi
     
     # Display summary
@@ -223,6 +226,7 @@ display_summary() {
         echo "Pattern regex: $pattern_regex" >&2
         echo "Match count: $pattern_count" >&2
         echo "Logical exit code: $logical_exit_code" >&2
+        echo "Error message: $error_message" >&2
         echo "Reason: Pattern '$pattern_name' found in command output" >&2
     else
         echo "Pattern matched: None" >&2
